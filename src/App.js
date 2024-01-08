@@ -1,12 +1,16 @@
 import './App.css';
+import NavBar from './NavBar'
+import Home from './Home'
+import { HashRouter as Router, Route, Routes } from 'react-router-dom'
 
 function App() {
   return (
-    <div className="App">
-      <div>
-        <h1>autoDCF</h1>
-      </div>
-    </div>
+    <Router>
+      <NavBar />
+      <Routes>
+        <Route path="/" element={<Home />} />
+      </Routes>
+    </Router>
   );
 }
 
