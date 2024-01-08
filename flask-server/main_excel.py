@@ -16,6 +16,8 @@ from openpyxl.styles.numbers import FORMAT_CURRENCY_USD_SIMPLE, FORMAT_PERCENTAG
 from openpyxl.utils import get_column_letter, column_index_from_string
 from openpyxl.cell import MergedCell
 from string import ascii_uppercase
+import sqlite3
+from datetime import datetime
 
 def check_file_exists(ticker, filename):
     # Connect to the SQLite database
