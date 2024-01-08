@@ -17,36 +17,116 @@ from openpyxl.utils import get_column_letter, column_index_from_string
 from openpyxl.cell import MergedCell
 from string import ascii_uppercase
 
+def check_file_exists(ticker, filename):
+    # Connect to the SQLite database
+    #db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'reports.db')
 
+    conn = sqlite3.connect(db_path)  # Replace 'your_database.db' with your actual database file
 
+    # Create a cursor object
+    cursor = conn.cursor()
+
+    # Execute the query to check if the file exists
+    cursor.execute("SELECT fileId FROM Files WHERE ticker = ? AND filename = ?", (ticker, filename))
+
+    # Fetch the result
+    result = cursor.fetchone()
+
+    # Close the cursor and connection
+    cursor.close()
+    conn.close()
+
+    # Return the fileId if found, otherwise return None
+    return result[0] if result else None
+
+def SaveUserData(user_id, file_id):
+    # Connect to the SQLite database
+    conn = sqlite3.connect(db_path)  # Replace 'your_database.db' with your actual database file
+
+    # Create a cursor object to execute SQL queries
+    cursor = conn.cursor()
+    # Get the current timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Insert a new record into the downloadHistory table
+    cursor.execute('''
+        INSERT INTO downloadHistory (timestamp, userid, fileId)
+        VALUES (?, ?, ?)
+    ''', (timestamp, user_id, file_id))
+    # Commit the changes and close the connection
+    conn.commit()
+    conn.close()
+
+def SaveFile(ticker, filename):
+    conn = sqlite3.connect(db_path)  # Replace 'your_database.db' with your actual database file
+
+    # Create a cursor object to execute SQL queries
+    cursor = conn.cursor()
+    # Get the current timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Insert a new record into the downloadHistory table
+    cursor = conn.cursor()
+
+# Insert a record into the 'Files' table
+    cursor.execute('''
+        INSERT INTO Files (ticker, filename) VALUES (?, ?)
+    ''', (ticker, filename))  # Replace with actual values
+
+    # Commit the changes
+    conn.commit()
+
+    # Retrieve the last inserted fileId
+    cursor.execute('''
+        SELECT last_insert_rowid()
+    ''')
+
+    file_id = cursor.fetchone()[0]
+    # Commit the changes and close the connection
+    conn.commit()
+    conn.close()
+    return file_id
+
+def CheckForFile(ticker, filename):
+    
+    full_path = os.path.join(ticker, filename)
+
+    # Check if the folder {curdate} exists, if not, create it
+    if not os.path.exists(ticker):
+        os.makedirs(ticker)
+    elif os.path.exists(full_path):
+        return True
+    return False
 
 #Main Code
 # Prompt the user for a ticker symbol
 
-
-ticker_symbol = input("Please enter the ticker symbol: ")
-start_year = input("Enter the start fiscal year (e.g., 2017): ")
-end_year = input("Enter the end fiscal year (e.g., 2022): ")
-
-
-# Convert start_year and end_year to integers
-start_year = int(start_year)
-end_year = int(end_year)
-
-
-# Generate a list of years from start_year to end_year
+ticker_symbol = sys.argv[2]
+start_year = int(sys.argv[3])
+end_year = int(sys.argv[4])
+statement_types = 'BS,CF,PL'
+userid = sys.argv[5]
+reportRoot = 'reports/'
+os.chdir (reportRoot);
 years = list(range(start_year, end_year + 1))
 years_str = ','.join(map(str, years)) # Convert the list of years to a comma-separated string
+curdate = datetime.now().strftime('%Y%m%d')
+filename = ticker_symbol + '_' + str(start_year) + '_' + str(end_year) + '.xlsx'
 
+file_id = check_file_exists(ticker_symbol, filename)
 
+if file_id is not None:
+  SaveUserData(userid, file_id)
+  print(ticker_symbol + '/' + filename)
+  return    
 
+if not os.path.exists(ticker_symbol):
+  os.makedirs(ticker_symbol)
+fullPath = os.path.join(ticker_symbol, filename)
 
+# Construct the full path with /{curdate}/{filename}
 # Construct the URL with the user's input
-url = f"https://backend.simfin.com/api/v3/companies/statements/compact?ticker={ticker_symbol}&statements=PL,BS,CF&period=FY&fyear={years_str}"
-
-
-#url = "https://backend.simfin.com/api/v3/companies/statements/compact?ticker=AMZN&statements=PL,BS,CF&period=FY&fyear=2017%2C2018%2C2019%2C2020%2C2021%2C2022"
-
+url = f"https://backend.simfin.com/api/v3/companies/statements/compact?ticker={ticker_symbol}&statements={statement_types}&period=FY&fyear={years_str}"
 
 headers = {
 "accept": "application/json",
@@ -56,7 +136,6 @@ headers = {
 
 response = requests.get(url, headers=headers)
 jsonStr = json.loads(response.text)
-
 
 data = jsonStr[0]['statements']
 arrDataFrames = np.empty(len(data), dtype=object)
@@ -80,18 +159,14 @@ wacc_df = wacc.get_wacc_dataframe(ticker_symbol, start_year, end_year)
 dcf_sheet = dcf.add_dcf_sheet(start_year, end_year, ticker_symbol)
 
 
-
-
 # Write the filtered data to an Excel file with formatting
-with pd.ExcelWriter(ticker_symbol + '_financial_statements.xlsx', engine='openpyxl') as writer:
+with pd.ExcelWriter(fullPath, engine='openpyxl') as writer:
 # Register the named styles with the writer's workbook
    writer.book.add_named_style(styleModule.currency_style)
    writer.book.add_named_style(styleModule.fiscal_year_style)
    for i in range(len(data)):
    # Write the DataFrame to the worksheet
        arrDataFrames[i].to_excel(writer, sheet_name=arrNames[i], startrow=1)
-
-
        # Get the worksheet object
        worksheet = writer.sheets[arrNames[i]]
        # Apply bold formatting to specific rows
@@ -100,19 +175,6 @@ with pd.ExcelWriter(ticker_symbol + '_financial_statements.xlsx', engine='openpy
    # Auto-adjust column widths for each sheet
    for sheet_name in writer.book.sheetnames:
        statementFunct.auto_adjust_column_width(writer.book[sheet_name])
-
-
-
-
-
-
-
-
-
-
-
-
-
 
    #Fixed Assets Sheet
    fixed_assets_Sheet.to_excel(writer, sheet_name='Fixed Assets', startrow=1)
@@ -173,25 +235,13 @@ with pd.ExcelWriter(ticker_symbol + '_financial_statements.xlsx', engine='openpy
    styleModule.set_data_cells_background(fa_worksheet, 9, 11, 1, end_column, "ebebeb")
    fixed_assets.style_ending_ppe_row(fa_worksheet, 'F8F7F7')
   
-  
-  
-  
-  
-  
    # Free Cash Flow Sheet
-
-
-
-
    fiscal_years = list(range(start_year + 1, end_year + 1)) + [f"{year}E" for year in range(end_year + 1, end_year + 6)]
    fiscal_years = list(map(str, fiscal_years))
-  
   
    free_cash_flow_sheet.to_excel(writer, sheet_name='Free Cash Flow', startrow=1)
    fcf_worksheet = writer.sheets['Free Cash Flow']
    freecashflow.auto_adjust_column_width(fcf_worksheet)
-
-
   
    header_row_num = 2
    for col_num in range(3, len(fiscal_years) + 2):  # Adjust the range based on your fiscal year columns
@@ -229,9 +279,6 @@ with pd.ExcelWriter(ticker_symbol + '_financial_statements.xlsx', engine='openpy
 
    styleModule.add_border_under_fiscal_year_row(fcf_worksheet, 26)
 
-
-
-
    # Set and style the "Assumptions" title cell
    title_row = 25
    title_cell = fcf_worksheet.cell(row=title_row, column=1)
@@ -257,17 +304,7 @@ with pd.ExcelWriter(ticker_symbol + '_financial_statements.xlsx', engine='openpy
 
    styleModule.set_data_cells_background(fcf_worksheet, 26, 34, 1, end_column, "ebebeb")
 
-
-
-
-
-
-
-
-
-
    # Net Working Capital sheet
-
 
    nwc_sheet.to_excel(writer, sheet_name='Net Working Capital', startrow=1)
    nwc_worksheet = writer.sheets['Net Working Capital']
@@ -278,10 +315,6 @@ with pd.ExcelWriter(ticker_symbol + '_financial_statements.xlsx', engine='openpy
 
 
    freecashflow.auto_adjust_column_width(nwc_worksheet)
-
-
-
-
    styleModule.NWCpopulate_and_style_fiscal_years(nwc_worksheet, start_year, end_year)
    styleModule.add_border_under_fiscal_year_row(nwc_worksheet, 2)
    styleModule.add_border_under_fiscal_year_row(nwc_worksheet, 18)
@@ -322,18 +355,7 @@ with pd.ExcelWriter(ticker_symbol + '_financial_statements.xlsx', engine='openpy
        cell.fill = PatternFill(start_color="1A759C", end_color="1A759C", fill_type="solid")
    nwc.apply_percentage_format_to_rows(nwc_worksheet)
 
-
-
-
-
-
-
-
-
-
    #WACC sheet
-
-
    wacc_df.to_excel(writer, sheet_name='WACC', index=True)
    wacc_worksheet = writer.sheets['WACC']
       
@@ -430,13 +452,11 @@ with pd.ExcelWriter(ticker_symbol + '_financial_statements.xlsx', engine='openpy
    title_cell.alignment = Alignment(horizontal='center', vertical='center')
    for col in range(1, last_col + 1):
        cell = dcf_worksheet.cell(row=title_row, column=col)
-       cell.fill = PatternFill(start_color="1A759C", end_color="1A759C", fill_type="solid")
+       cell.fill = PatternFill(start_color="1A759C", end_color="1A759C", fill_type="solid")  
 
-  
-
-
-print("Wrote file")
-
+fileId = SaveFile(ticker_symbol, filename)
+SaveUserData(userid, fileId)
+print(fullPath)
 
 
 
