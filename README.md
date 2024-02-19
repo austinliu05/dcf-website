@@ -13,7 +13,7 @@ When you finish making changes
 git add .
 
 ## Commit changes
-git commit -m "<commit message>"
+git commit -m "<commit-message>"
 
 ## Connect local repository with remote
 git add remote origin https://github.com/austinliu05/dcf-website.git
