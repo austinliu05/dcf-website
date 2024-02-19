@@ -3,7 +3,7 @@
 Begin by cloning the repository into your local environment 
 git clone https://github.com/austinliu05/dcf-website.git
 
-Run npm start to get the local website loaded
+Run 'npm start' to get the local website loaded
 
 Follow thru tutorial 
 
